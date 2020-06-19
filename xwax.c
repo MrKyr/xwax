@@ -43,6 +43,10 @@
 #include "track.h"
 #include "xwax.h"
 
+#ifdef WITH_OSC
+#include "osc.h"
+#endif
+
 #define DEFAULT_OSS_BUFFERS 8
 #define DEFAULT_OSS_FRAGMENT 7
 
@@ -129,6 +133,12 @@ static void usage(FILE *fd)
       "  --dicer <dev>   Novation Dicer\n\n");
 #endif
 
+#ifdef WITH_OSC
+    fprintf(fd, "OSC support:\n"
+        "  --osc           Switch on open sound control\n"
+        "  --headless      Run in headless mode with out a graphical interface\n\n");
+#endif
+
     fprintf(fd,
       "The ordering of options is important. Options apply to subsequent\n"
       "music libraries or decks, which can be given multiple times. See the\n"
@@ -167,7 +177,7 @@ static int commit_deck(void)
 
     d = &deck[ndeck];
 
-    r = deck_init(d, &rt, timecode, importer, speed, phono, protect);
+    r = deck_init(d, &rt, timecode, importer, speed, phono, protect, ndeck);
     if (r == -1)
         return -1;
 
@@ -200,6 +210,11 @@ int main(int argc, char *argv[])
 
 #ifdef WITH_ALSA
     int alsa_buffer;
+#endif
+
+#ifdef WITH_OSC
+    bool use_osc;
+    bool headless;
 #endif
 
     fprintf(stderr, "%s\n\n" NOTICE "\n\n", banner);
@@ -251,6 +266,11 @@ int main(int argc, char *argv[])
 #ifdef WITH_OSS
     oss_fragment = DEFAULT_OSS_FRAGMENT;
     oss_buffers = DEFAULT_OSS_BUFFERS;
+#endif
+
+#ifdef WITH_OSC
+    use_osc = false;
+    headless = false;
 #endif
 
     /* Skip over command name */
@@ -597,6 +617,20 @@ int main(int argc, char *argv[])
             argc -= 2;
 #endif
 
+#ifdef WITH_OSC
+        } else if (!strcmp(argv[0], "--osc")) {
+           use_osc = true;
+
+           argv += 1;
+           argc -= 1;
+
+        } else if (!strcmp(argv[0], "--headless")) {
+          headless = true;
+
+          argv += 1;
+          argc -= 1;
+#endif
+
         } else {
             fprintf(stderr, "'%s' argument is unknown; try -h.\n", argv[0]);
             return -1;
@@ -615,6 +649,17 @@ int main(int argc, char *argv[])
 
     rc = EXIT_FAILURE; /* until clean exit */
 
+#ifdef WITH_OSC
+    if (use_osc) {
+       if (osc_start((struct deck *)&deck, &library, ndeck) == -1) {
+          fprintf(stderr, "Error starting osc server");
+          return -1;
+       } else {
+          fprintf(stderr, "Successfully started osc server\n");
+       }
+    }
+#endif
+
     /* Order is important: launch realtime thread first, then mlock.
      * Don't mlock the interface, use sparingly for audio threads */
 
@@ -626,8 +671,19 @@ int main(int argc, char *argv[])
         goto out_rt;
     }
 
-    if (interface_start(&library, geo, decor) == -1)
+#ifdef WITH_OSC
+    if (!headless) {
+#endif
+      if (interface_start(&library, geo, decor) == -1)
         goto out_rt;
+#ifdef WITH_OSC
+    } else {
+      for (n = 0; n < ndeck; n++) {
+        if (timecoder_monitor_init(&deck[n].timecoder, 50) == -1)
+          return -1;
+      }
+    }
+#endif
 
     if (rig_main() == -1)
         goto out_interface;
@@ -650,6 +706,11 @@ out_rt:
     library_clear(&library);
     rt_clear(&rt);
     rig_clear();
+#ifdef WITH_OSC
+    if (use_osc) {
+       osc_stop();
+    }
+#endif
     library_global_clear();
     thread_global_clear();
 

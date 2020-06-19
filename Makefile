@@ -27,6 +27,7 @@ SDL_CFLAGS ?= `sdl-config --cflags`
 SDL_LIBS ?= `sdl-config --libs` -lSDL_ttf
 ALSA_LIBS ?= -lasound
 JACK_LIBS ?= -ljack
+LIBLO_LIBS ?= -llo
 
 # Installation paths
 
@@ -39,7 +40,7 @@ DOCDIR ?= $(PREFIX)/share/doc
 
 # Build flags
 
-CFLAGS ?= -O3
+CFLAGS ?= -O3 -g
 CFLAGS += -Wall
 CPPFLAGS += -MMD
 LDFLAGS ?= -O3
@@ -96,6 +97,13 @@ endif
 ifdef OSS
 OBJS += oss.o
 DEVICE_CPPFLAGS += -DWITH_OSS
+endif
+
+# OSC support?
+ifdef OSC
+OBJS += osc.o
+DEVICE_CPPFLAGS += -DWITH_OSC
+DEVICE_LIBS += $(LIBLO_LIBS)
 endif
 
 TEST_OBJS = $(addsuffix .o,$(TESTS))
