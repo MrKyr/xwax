@@ -49,7 +49,7 @@
 /* Font definitions */
 
 #define FONT "DejaVuSans.ttf"
-#define FONT_SIZE 10
+#define FONT_SIZE 12
 #define FONT_SPACE 15
 
 #define EM_FONT "DejaVuSans-Oblique.ttf"
