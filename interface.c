@@ -210,8 +210,8 @@ static void time_to_clock(char *buf, char *deci, int t)
     if (neg)
         *buf++ = '-';
 
-    sprintf(buf, "%02d:%02d.", minutes, seconds);
-    sprintf(deci, "%03d", frac);
+    sprintf(buf, "%02d:%02d", minutes, seconds);
+    sprintf(deci, ".%03d", frac);
 }
 
 /*
