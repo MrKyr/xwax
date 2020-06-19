@@ -284,11 +284,11 @@ int osc_send_status(lo_address a, int d)
     struct deck *de;
     struct player *pl;
     struct track *tr;
-    struct timecoder *tc;
+    //struct timecoder *tc;
     de = &osc_deck[d];
     pl = &de->player;
     tr = pl->track;
-    tc = pl->timecoder;
+    //tc = pl->timecoder;
 
     char *path;
     if(tr->path)
