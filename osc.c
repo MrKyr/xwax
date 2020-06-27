@@ -290,7 +290,7 @@ int osc_send_status(lo_address a, int d)
     tr = pl->track;
     //tc = pl->timecoder;
 
-    char *path;
+    const char *path;
     if(tr->path)
         path = tr->path;
     else
