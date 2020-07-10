@@ -72,6 +72,16 @@ static struct timecode_def timecodes[] = {
         .safe = 917000,
     },
     {
+        .name = "serato_rel",
+        .desc = "Serato 2nd Ed., relative",
+        .resolution = 1000,
+        .bits = 20,
+        .seed = 0x8f3c6,
+        .taps = 0x4f0d8, /* reverse of side A */
+        .length = 0,
+        .safe = 707000,
+    },
+    {
         .name = "serato_cd",
         .desc = "Serato CD",
         .resolution = 1000,
