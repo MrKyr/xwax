@@ -66,6 +66,7 @@ struct record* listing_add(struct listing *l, struct record *r);
 int library_init(struct library *li);
 void library_clear(struct library *li);
 
+struct record* library_add(struct library *l, struct record *d);
 struct record* get_record(char *line);
 
 int library_import(struct library *lib, const char *scan, const char *path);

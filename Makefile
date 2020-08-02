@@ -27,6 +27,7 @@ SDL_CFLAGS ?= `sdl-config --cflags`
 SDL_LIBS ?= `sdl-config --libs` -lSDL_ttf
 ALSA_LIBS ?= -lasound
 JACK_LIBS ?= -ljack
+LIBLO_LIBS ?= -llo
 
 # Installation paths
 
@@ -39,7 +40,7 @@ DOCDIR ?= $(PREFIX)/share/doc
 
 # Build flags
 
-CFLAGS ?= -O3
+CFLAGS ?= -O3 -g
 CFLAGS += -Wall
 CPPFLAGS += -MMD
 LDFLAGS ?= -O3
@@ -47,55 +48,62 @@ LDFLAGS ?= -O3
 # Core objects and libraries
 
 OBJS = controller.o \
-	cues.o \
-	deck.o \
-	device.o \
-	dummy.o \
-	excrate.o \
-	external.o \
-	index.o \
-	interface.o \
-	library.o \
-	listbox.o \
-	lut.o \
-	player.o \
-	realtime.o \
-	rig.o \
-	selector.o \
-	status.o \
-	thread.o \
-	timecoder.o \
-	track.o \
-	xwax.o
+       cues.o \
+       deck.o \
+       device.o \
+       dummy.o \
+       excrate.o \
+       external.o \
+       index.o \
+       interface.o \
+       library.o \
+       listbox.o \
+       lut.o \
+       player.o \
+       realtime.o \
+       rig.o \
+       selector.o \
+       status.o \
+       thread.o \
+       timecoder.o \
+       track.o \
+       xwax.o
 DEVICE_CPPFLAGS =
 DEVICE_LIBS =
 
 TESTS = tests/cues \
-	tests/external \
-	tests/library \
-	tests/observer \
-	tests/status \
-	tests/timecoder \
-	tests/track \
-	tests/ttf
+        tests/external \
+        tests/library \
+        tests/observer \
+        tests/status \
+        tests/timecoder \
+        tests/track \
+        tests/ttf
 
 # Optional device types
 
 ifdef ALSA
-OBJS += alsa.o dicer.o midi.o
-DEVICE_CPPFLAGS += -DWITH_ALSA
-DEVICE_LIBS += $(ALSA_LIBS)
+    OBJS += alsa.o dicer.o midi.o
+    DEVICE_CPPFLAGS += -DWITH_ALSA
+    DEVICE_LIBS += $(ALSA_LIBS)
 endif
 
 ifdef JACK
-OBJS += jack.o
-DEVICE_CPPFLAGS += -DWITH_JACK
-DEVICE_LIBS += $(JACK_LIBS)
+    OBJS += jack.o
+    DEVICE_CPPFLAGS += -DWITH_JACK
+    DEVICE_LIBS += $(JACK_LIBS)
 endif
 
 ifdef OSS
-OBJS += oss.o
-DEVICE_CPPFLAGS += -DWITH_OSS
+    OBJS += oss.o
+    DEVICE_CPPFLAGS += -DWITH_OSS
+endif
+
+# OSC support?
+ifdef OSC
+    OBJS += osc.o
+    DEVICE_CPPFLAGS += -DWITH_OSC
+    DEVICE_LIBS += $(LIBLO_LIBS)
 endif
 
 TEST_OBJS = $(addsuffix .o,$(TESTS))
@@ -104,13 +112,13 @@ DEPS = $(OBJS:.o=.d) $(TEST_OBJS:.o=.d) mktimecode.d
 # Rules
 
 .PHONY:		all
-all:		xwax mktimecode tests
+all:		xwax xwax-client mktimecode tests
 
 # Dynamic versioning
 
 .PHONY:		FORCE
 .version:	FORCE
-		./mkversion -r
+	./mkversion -r
 
 VERSION = $(shell ./mkversion)
 
@@ -128,6 +136,11 @@ xwax.o:		CPPFLAGS += $(DEVICE_CPPFLAGS)
 xwax.o:		CPPFLAGS += -DEXECDIR=\"$(EXECDIR)\" -DVERSION=\"$(VERSION)\"
 xwax.o:		.version
 
+# Client
+
+xwax-client:	xwax-client.o
+xwax-client:	LDLIBS += $(LIBLO_LIBS)
+
 # Supporting programs
 
 mktimecode:	mktimecode.o
@@ -137,24 +150,25 @@ mktimecode:	LDLIBS  += -lm
 
 .PHONY:		install
 install:
-		$(INSTALL) -D xwax $(DESTDIR)$(BINDIR)/xwax
-		$(INSTALL) -D scan $(DESTDIR)$(EXECDIR)/xwax-scan
-		$(INSTALL) -D import $(DESTDIR)$(EXECDIR)/xwax-import
-		$(INSTALL) -D -m 0644 xwax.1 $(DESTDIR)$(MANDIR)/man1/xwax.1
-		$(INSTALL) -D -m 0644 CHANGES $(DESTDIR)$(DOCDIR)/xwax/CHANGES
-		$(INSTALL) -D -m 0644 COPYING $(DESTDIR)$(DOCDIR)/xwax/COPYING
-		$(INSTALL) -D -m 0644 README $(DESTDIR)$(DOCDIR)/xwax/README
+	$(INSTALL) -D xwax $(DESTDIR)$(BINDIR)/xwax
+	$(INSTALL) -D xwax-client $(DESTDIR)$(BINDIR)/xwax-client
+	$(INSTALL) -D scan $(DESTDIR)$(EXECDIR)/xwax-scan
+	$(INSTALL) -D import $(DESTDIR)$(EXECDIR)/xwax-import
+	$(INSTALL) -D -m 0644 xwax.1 $(DESTDIR)$(MANDIR)/man1/xwax.1
+	$(INSTALL) -D -m 0644 CHANGES $(DESTDIR)$(DOCDIR)/xwax/CHANGES
+	$(INSTALL) -D -m 0644 COPYING $(DESTDIR)$(DOCDIR)/xwax/COPYING
+	$(INSTALL) -D -m 0644 README $(DESTDIR)$(DOCDIR)/xwax/README
 
 # Distribution archive from Git source code
 
 .PHONY:		dist
 dist:		.version
-		./mkdist $(VERSION)
+	./mkdist $(VERSION)
 
 # Editor tags files
 
 TAGS:		$(OBJS:.o=.c)
-		etags $^
+	etags $^
 
 # Manual tests
 
@@ -189,10 +203,10 @@ tests/ttf:	LDLIBS += $(SDL_LIBS)
 
 .PHONY:		clean
 clean:
-		rm -f xwax \
-			$(OBJS) $(DEPS) \
-			$(TESTS) $(TEST_OBJS) \
-			mktimecode mktimecode.o \
-			TAGS
+	rm -f xwax xwax-client xwax-client.o \
+	    $(OBJS) $(DEPS) \
+	    $(TESTS) $(TEST_OBJS) \
+	    mktimecode mktimecode.o \
+	    TAGS
 
 -include $(DEPS)
