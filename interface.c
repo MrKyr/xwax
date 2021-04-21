@@ -49,8 +49,8 @@
 /* Font definitions */
 
 #define FONT "DejaVuSans.ttf"
-#define FONT_SIZE 12
-#define FONT_SPACE 15
+#define FONT_SIZE 20
+#define FONT_SPACE 23
 
 #define EM_FONT "DejaVuSans-Oblique.ttf"
 
@@ -98,9 +98,9 @@
 #define SEARCH_HEIGHT (FONT_SPACE)
 #define STATUS_HEIGHT (DETAIL_FONT_SPACE)
 
-#define BPM_WIDTH 32
-#define SORT_WIDTH 21
-#define RESULTS_ARTIST_WIDTH 200
+#define BPM_WIDTH 43
+#define SORT_WIDTH 45
+#define RESULTS_ARTIST_WIDTH 300
 
 #define TOKEN_SPACE 2
 
@@ -522,7 +522,7 @@ static void draw_token(SDL_Surface *surface, const struct rect *rect,
 
     draw_rect(surface, rect, bg_col);
     b = shrink(*rect, TOKEN_SPACE);
-    draw_text(surface, &b, buf, detail_font, text_col, col);
+    draw_text(surface, &b, buf, font, text_col, col);
 }
 
 /*
