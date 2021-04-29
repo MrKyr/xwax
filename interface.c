@@ -48,14 +48,14 @@
 
 /* Font definitions */
 
-#define FONT "DejaVuSans.ttf"
+#define FONT "TerminusTTF.ttf"
 #define FONT_SIZE 20
 #define FONT_SPACE 23
 
-#define EM_FONT "DejaVuSans-Oblique.ttf"
+#define EM_FONT "TerminusTTF-Italic.ttf"
 
-#define BIG_FONT "DejaVuSans-Bold.ttf"
-#define BIG_FONT_SIZE 14
+#define BIG_FONT "TerminusTTF-Bold.ttf"
+#define BIG_FONT_SIZE 15
 #define BIG_FONT_SPACE 19
 
 #define CLOCK_FONT FONT
@@ -64,8 +64,8 @@
 #define DECI_FONT FONT
 #define DECI_FONT_SIZE 20
 
-#define DETAIL_FONT "DejaVuSansMono-Bold.ttf"
-#define DETAIL_FONT_SIZE 9
+#define DETAIL_FONT "TerminusTTF-Bold.ttf"
+#define DETAIL_FONT_SIZE 12
 #define DETAIL_FONT_SPACE 12
 
 /* Screen size (pixels) */
@@ -75,7 +75,7 @@
 
 /* Relationship between pixels and screen units */
 
-#define DEFAULT_SCALE 1.0
+#define DEFAULT_SCALE 1.2
 
 /* Dimensions in our own screen units */
 
@@ -100,7 +100,7 @@
 
 #define BPM_WIDTH 43
 #define SORT_WIDTH 45
-#define RESULTS_ARTIST_WIDTH 300
+#define RESULTS_ARTIST_WIDTH 400
 
 #define TOKEN_SPACE 2
 
