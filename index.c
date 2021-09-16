@@ -145,6 +145,31 @@ static int record_cmp_artist(const struct record *a, const struct record *b)
     return strcmp(a->pathname, b->pathname);
 }
 
+static int record_cmp_key(const struct record *a, const struct record *b)
+{
+    int r;
+
+    r = strcasecmp(a->key, b->key);
+    if (r < 0)
+        return -1;
+    else if (r > 0)
+        return 1;
+
+    r = strcasecmp(a->artist, b->artist);
+    if (r < 0)
+        return -1;
+    else if (r > 0)
+        return 1;
+
+    r = strcasecmp(a->title, b->title);
+    if (r < 0)
+        return -1;
+    else if (r > 0)
+        return 1;
+
+    return record_cmp_artist(a, b);
+}
+
 /*
  * Compare two records principally by BPM, fastest to slowest
  * followed by unknown
@@ -158,7 +183,7 @@ static int record_cmp_bpm(const struct record *a, const struct record *b)
     if (a->bpm > b->bpm)
         return 1;
 
-    return record_cmp_artist(a, b);
+    return record_cmp_key(a, b);
 }
 
 /*
@@ -178,6 +203,8 @@ static bool record_match_word(struct record *re, const char *match)
             return true;
     } else {
         if (strcasestr(re->artist, match) != NULL)
+            return true;
+        if (strcasestr(re->key, match) != NULL)
             return true;
         if (strcasestr(re->title, match) != NULL)
             return true;
@@ -328,6 +355,9 @@ static size_t bin_search(struct record **base, size_t n,
     switch (sort) {
     case SORT_ARTIST:
         r = record_cmp_artist(item, x);
+        break;
+    case SORT_KEY:
+        r = record_cmp_key(item, x);
         break;
     case SORT_BPM:
         r = record_cmp_bpm(item, x);

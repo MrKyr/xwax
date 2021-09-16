@@ -29,7 +29,7 @@
 /* A set of records, with several optimised indexes */
 
 struct listing {
-    struct index by_artist, by_bpm, by_order;
+    struct index by_artist, by_key, by_bpm, by_order;
     struct event addition;
 };
 
