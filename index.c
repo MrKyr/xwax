@@ -153,10 +153,10 @@ static int record_cmp_artist(const struct record *a, const struct record *b)
 static int record_cmp_bpm(const struct record *a, const struct record *b)
 {
     if (a->bpm < b->bpm)
-        return 1;
+        return -1;
 
     if (a->bpm > b->bpm)
-        return -1;
+        return 1;
 
     return record_cmp_artist(a, b);
 }
