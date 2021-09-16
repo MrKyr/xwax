@@ -392,6 +392,9 @@ void retarget(struct player *pl)
         pl->recalibrate = false;
     }
 
+    if (pl->target_position < 25.00)
+        pl->offset = 25.00;
+
     /* Calculate the pitch compensation required to get us back on
      * track with the absolute timecode position */
 
