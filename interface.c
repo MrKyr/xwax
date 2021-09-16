@@ -49,14 +49,14 @@
 
 /* Font definitions */
 
-#define FONT "DejaVuSans.ttf"
-#define FONT_SIZE 10
-#define FONT_SPACE 15
+#define FONT "TerminusTTF.ttf"
+#define FONT_SIZE 20
+#define FONT_SPACE 23
 
-#define EM_FONT "DejaVuSans-Oblique.ttf"
+#define EM_FONT "TerminusTTF-Italic.ttf"
 
-#define BIG_FONT "DejaVuSans-Bold.ttf"
-#define BIG_FONT_SIZE 14
+#define BIG_FONT "TerminusTTF-Bold.ttf"
+#define BIG_FONT_SIZE 15
 #define BIG_FONT_SPACE 19
 
 #define CLOCK_FONT FONT
@@ -65,8 +65,8 @@
 #define DECI_FONT FONT
 #define DECI_FONT_SIZE 20
 
-#define DETAIL_FONT "DejaVuSansMono-Bold.ttf"
-#define DETAIL_FONT_SIZE 9
+#define DETAIL_FONT "TerminusTTF-Bold.ttf"
+#define DETAIL_FONT_SIZE 12
 #define DETAIL_FONT_SPACE 12
 
 /* Screen size (pixels) */
@@ -76,7 +76,7 @@
 
 /* Relationship between pixels and screen units */
 
-#define DEFAULT_SCALE 1.0
+#define DEFAULT_SCALE 1.2
 
 /* Dimensions in our own screen units */
 
@@ -99,9 +99,9 @@
 #define SEARCH_HEIGHT (FONT_SPACE)
 #define STATUS_HEIGHT (DETAIL_FONT_SPACE)
 
-#define BPM_WIDTH 32
-#define SORT_WIDTH 21
-#define RESULTS_ARTIST_WIDTH 200
+#define BPM_WIDTH 43
+#define SORT_WIDTH 45
+#define RESULTS_ARTIST_WIDTH 400
 
 #define TOKEN_SPACE 2
 
@@ -523,7 +523,7 @@ static void draw_token(SDL_Surface *surface, const struct rect *rect,
 
     draw_rect(surface, rect, bg_col);
     b = shrink(*rect, TOKEN_SPACE);
-    draw_text(surface, &b, buf, detail_font, text_col, col);
+    draw_text(surface, &b, buf, font, text_col, col);
 }
 
 /*
