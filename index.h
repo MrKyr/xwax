@@ -23,14 +23,15 @@
 #include <stddef.h>
 
 #define SORT_ARTIST   0
-#define SORT_BPM      1
-#define SORT_PLAYLIST 2
-#define SORT_END      3
+#define SORT_KEY      1
+#define SORT_BPM      2
+#define SORT_PLAYLIST 3
+#define SORT_END      4
 
 /* A single music track in our listings */
 
 struct record {
-    char *pathname, *artist, *title; /* a single malloc */
+    char *pathname, *artist, *title, *key; /* a single malloc */
 
     /* An optional extra string may be used to match against search
      * input; allows us to handle locale but still type in ASCII */

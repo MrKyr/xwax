@@ -163,6 +163,7 @@ static SDL_Color background_col = {0, 0, 0, 255},
     detail_col = {128, 128, 128, 255},
     needle_col = {255, 255, 255, 255},
     artist_col = {16, 64, 0, 255},
+    key_col = {16, 16, 128, 255},
     bpm_col = {64, 16, 0, 255};
 
 static unsigned short *spinner_angle, spinner_size;
@@ -1282,6 +1283,10 @@ static void draw_crate_row(const void *context,
         draw_token(surface, &right, "ART", text_col, artist_col, selected_col);
         break;
 
+    case SORT_KEY:
+        draw_token(surface, &right, "KEY", text_col, key_col, selected_col);
+        break;
+
     case SORT_BPM:
         draw_token(surface, &right, "BPM", text_col, bpm_col, selected_col);
         break;
@@ -1346,6 +1351,10 @@ static void draw_record_row(const void *context,
     split(right, from_left(SPACER, 0), &left, &right);
     draw_rect(surface, &left, col);
     draw_text_in_locale(surface, &right, record->title, font, text_col, col);
+
+    split(right, from_left(width * 1.5, 0), &left, &right);
+    draw_rect(surface, &right, col);
+    draw_text_in_locale(surface, &right, record->key, font, text_col, col);
 }
 
 /*

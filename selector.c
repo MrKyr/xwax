@@ -39,6 +39,7 @@ static void retain_target(struct selector *sel)
 
     switch (sel->sort) {
     case SORT_ARTIST:
+    case SORT_KEY:
     case SORT_BPM:
         n = index_find(l, sel->target, sel->sort);
         break;
@@ -115,6 +116,8 @@ static struct index* initial(struct selector *sel)
     switch (sel->sort) {
     case SORT_ARTIST:
         return &c->listing->by_artist;
+    case SORT_KEY:
+        return &c->listing->by_key;
     case SORT_BPM:
         return &c->listing->by_bpm;
     case SORT_PLAYLIST:

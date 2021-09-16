@@ -30,6 +30,7 @@
 
 #include "excrate.h"
 #include "external.h"
+#include "index.h"
 
 #define CRATE_ALL "All records"
 
@@ -63,6 +64,7 @@ void library_global_clear(void)
 void listing_init(struct listing *l)
 {
     index_init(&l->by_artist);
+    index_init(&l->by_key);
     index_init(&l->by_bpm);
     index_init(&l->by_order);
     event_init(&l->addition);
@@ -71,6 +73,7 @@ void listing_init(struct listing *l)
 void listing_clear(struct listing *l)
 {
     index_clear(&l->by_artist);
+    index_clear(&l->by_key);
     index_clear(&l->by_bpm);
     index_clear(&l->by_order);
     event_clear(&l->addition);
@@ -273,12 +276,19 @@ struct record* listing_add(struct listing *l, struct record *r)
 
     if (index_reserve(&l->by_artist, 1) == -1)
         return NULL;
+    if (index_reserve(&l->by_key, 1) == -1)
+        return NULL;
     if (index_reserve(&l->by_bpm, 1) == -1)
         return NULL;
     if (index_reserve(&l->by_order, 1) == -1)
         return NULL;
 
     x = index_insert(&l->by_artist, r, SORT_ARTIST);
+    assert(x != NULL);
+    if (x != r)
+        return x;
+
+    x = index_insert(&l->by_key, r, SORT_KEY);
     assert(x != NULL);
     if (x != r)
         return x;
@@ -481,7 +491,7 @@ static size_t split(char *s, char *x[], size_t len)
  * Return: string with responsibility, or NULL if not required
  */
 
-static char* matchable(const char *artist, const char *title)
+static char* matchable(const char *artist, const char *title, const char *key)
 {
     char *buf, *in, *out;
     size_t len, fill, nonrev;
@@ -490,12 +500,12 @@ static char* matchable(const char *artist, const char *title)
      * Append all the strings of interest into a single buffer
      */
 
-    len = strlen(artist) + strlen(title) + 1;
+    len = strlen(artist) + strlen(title) + strlen(key) + 1;
 
     buf = alloca(len + 1); /* include \0 terminator */
     assert(buf);
 
-    sprintf(buf, "%s %s", artist, title);
+    sprintf(buf, "%s %s %s", artist, title, key);
 
     /*
      * Perform iconv
@@ -533,7 +543,7 @@ struct record* get_record(char *line)
 {
     int n;
     struct record *x;
-    char *field[4];
+    char *field[5];
 
     x = malloc(sizeof *x);
     if (!x) {
@@ -546,6 +556,20 @@ struct record* get_record(char *line)
     n = split(line, field, ARRAY_SIZE(field));
 
     switch (n) {
+    case 5:
+        x->pathname = field[0];
+        x->artist = field[1];
+        x->title = field[2];
+        x->key = field[3];
+
+        x->bpm = parse_bpm(field[4]);
+        if (!isfinite(x->bpm)) {
+            fprintf(stderr, "%s: Ignoring malformed BPM '%s'\n",
+                    field[0], field[3]);
+            x->bpm = 0.0;
+        }
+        break;
+
     case 4:
         x->bpm = parse_bpm(field[3]);
         if (!isfinite(x->bpm)) {
@@ -570,7 +594,7 @@ struct record* get_record(char *line)
     /* Decide if this record needs a character-equivalent in the
      * locale used for searching */
 
-    x->match = matchable(x->artist, x->title);
+    x->match = matchable(x->artist, x->title, x->key); //kyr
 
     return x;
 
