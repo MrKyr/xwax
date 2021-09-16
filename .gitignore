@@ -16,3 +16,4 @@ tests/scan-bpm
 tests/timecoder
 tests/track
 tests/ttf
+tests/status
