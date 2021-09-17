@@ -110,6 +110,7 @@ void deck_load(struct deck *d, struct record *record)
     cues_load_from_file(&(d->cues), record->pathname);
 
     d->record = record;
+    record->status = RECORD_NOT_PLAYED;
     player_set_track(&d->player, t); /* passes reference */
 
     double p = cues_get(&d->cues, 0);

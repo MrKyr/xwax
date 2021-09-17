@@ -468,3 +468,26 @@ void selector_search_refine(struct selector *sel, char key)
     set_target(sel);
     notify(sel);
 }
+
+int selector_toggle_status(struct selector *sel)
+{
+    if(sel->records.selected < 0)
+        return -1;
+
+    struct record* selected = selector_current(sel);
+    if(selected == NULL)
+        return -1;
+
+    switch (selected->status) {
+
+        case RECORD_PLAYED:
+            selected->status = RECORD_NOT_PLAYED;
+            break;
+
+        case RECORD_NOT_PLAYED:
+            selected->status = RECORD_PLAYED;
+            break;
+    }
+
+    return 0;
+}
