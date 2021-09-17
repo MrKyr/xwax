@@ -27,6 +27,9 @@
 #define SORT_PLAYLIST 2
 #define SORT_END      3
 
+#define RECORD_NOT_PLAYED 0
+#define RECORD_PLAYED 2
+
 /* A single music track in our listings */
 
 struct record {
@@ -38,6 +41,7 @@ struct record {
     char *match; /* or NULL */
 
     double bpm; /* or 0.0 if not known */
+    int status;
 };
 
 /* Index points to records, but does not manage those pointers */

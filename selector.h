@@ -69,4 +69,6 @@ void selector_rescan(struct selector *sel);
 void selector_search_expand(struct selector *sel);
 void selector_search_refine(struct selector *sel, char key);
 
+int selector_toggle_status(struct selector *sel);
+
 #endif
