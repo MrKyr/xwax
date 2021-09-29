@@ -56,8 +56,8 @@
 #define EM_FONT "TerminusTTF-Italic.ttf"
 
 #define BIG_FONT "TerminusTTF-Bold.ttf"
-#define BIG_FONT_SIZE 15
-#define BIG_FONT_SPACE 19
+#define BIG_FONT_SIZE 18
+#define BIG_FONT_SPACE 21
 
 #define CLOCK_FONT FONT
 #define CLOCK_FONT_SIZE 32
