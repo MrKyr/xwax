@@ -46,9 +46,9 @@
 #define DEFAULT_OSS_BUFFERS 8
 #define DEFAULT_OSS_FRAGMENT 7
 
-#define DEFAULT_ALSA_BUFFER 8 /* milliseconds */
+#define DEFAULT_ALSA_BUFFER 240 /* samples */
 
-#define DEFAULT_RATE 44100
+#define DEFAULT_RATE 48000
 #define DEFAULT_PRIORITY 80
 
 #define DEFAULT_IMPORTER EXECDIR "/xwax-import"
@@ -105,7 +105,7 @@ static void usage(FILE *fd)
 #ifdef WITH_OSS
     fprintf(fd, "OSS device options:\n"
       "  -d <device>    Build a deck connected to OSS audio device\n"
-      "  -r <hz>        Sample rate (default %dHz)\n"
+      "  --rate <hz>    Sample rate (default %dHz)\n"
       "  -b <n>         Number of buffers (default %d)\n"
       "  -f <n>         Buffer size to request (2^n bytes, default %d)\n\n",
       DEFAULT_RATE, DEFAULT_OSS_BUFFERS, DEFAULT_OSS_FRAGMENT);
@@ -114,8 +114,8 @@ static void usage(FILE *fd)
 #ifdef WITH_ALSA
     fprintf(fd, "ALSA device options:\n"
       "  -a <device>    Build a deck connected to ALSA audio device\n"
-      "  -r <hz>        Sample rate (default %dHz)\n"
-      "  -m <ms>        Buffer time (default %dms)\n\n",
+      "  --rate <hz>    Sample rate (default %dHz)\n"
+      "  --buffer <n>   Buffer size (default %d samples)\n\n",
       DEFAULT_RATE, DEFAULT_ALSA_BUFFER);
 #endif
 
@@ -135,7 +135,9 @@ static void usage(FILE *fd)
       "manual for details.\n\n"
       "Available timecodes (for use with -t):\n"
       "  serato_2a (default), serato_2b, serato_cd,\n"
-      "  traktor_a, traktor_b, mixvibes_v2, mixvibes_7inch\n\n"
+      "  pioneer_a, pioneer_b,\n"
+      "  traktor_a, traktor_b,\n"
+      "  mixvibes_v2, mixvibes_7inch\n\n"
       "See the xwax(1) man page for full information and examples.\n");
 }
 
@@ -191,7 +193,7 @@ int main(int argc, char *argv[])
     struct library library;
 
 #if defined WITH_OSS || WITH_ALSA
-    int rate;
+    unsigned int rate;
 #endif
 
 #ifdef WITH_OSS
@@ -199,7 +201,7 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef WITH_ALSA
-    int alsa_buffer;
+    unsigned int alsa_buffer;
 #endif
 
     fprintf(stderr, "%s\n\n" NOTICE "\n\n", banner);
@@ -312,18 +314,18 @@ int main(int argc, char *argv[])
 #endif
 
 #if defined WITH_OSS || WITH_ALSA
-        } else if (!strcmp(argv[0], "-r")) {
+        } else if (!strcmp(argv[0], "--rate")) {
 
             /* Set sample rate for subsequence devices */
 
             if (argc < 2) {
-                fprintf(stderr, "-r requires an integer argument.\n");
+                fprintf(stderr, "--rate requires an integer argument.\n");
                 return -1;
             }
 
-            rate = strtol(argv[1], &endptr, 10);
+            rate = strtoul(argv[1], &endptr, 10);
             if (*endptr != '\0') {
-                fprintf(stderr, "-r requires an integer argument.\n");
+                fprintf(stderr, "--rate requires an integer argument.\n");
                 return -1;
             }
 
@@ -332,18 +334,18 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef WITH_ALSA
-        } else if (!strcmp(argv[0], "-m")) {
+        } else if (!strcmp(argv[0], "--buffer")) {
 
             /* Set size of ALSA buffer for subsequence devices */
 
             if (argc < 2) {
-                fprintf(stderr, "-m requires an integer argument.\n");
+                fprintf(stderr, "--buffer requires an integer argument.\n");
                 return -1;
             }
 
-            alsa_buffer = strtol(argv[1], &endptr, 10);
+            alsa_buffer = strtoul(argv[1], &endptr, 10);
             if (*endptr != '\0') {
-                fprintf(stderr, "-m requires an integer argument.\n");
+                fprintf(stderr, "--buffer requires an integer argument.\n");
                 return -1;
             }
 
