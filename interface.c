@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Mark Hills <mark@xwax.org>
+ * Copyright (C) 2026 Mark Hills <mark@xwax.org>
  *
  * This file is part of "xwax".
  *
@@ -51,29 +51,29 @@
 /* Font definitions */
 
 #define FONT "DejaVuSans.ttf"
-#define FONT_SIZE 10
-#define FONT_SPACE 15
+#define FONT_SIZE 16
+#define FONT_SPACE 24
 
 #define EM_FONT "DejaVuSans-Oblique.ttf"
 
 #define BIG_FONT "DejaVuSans-Bold.ttf"
-#define BIG_FONT_SIZE 14
-#define BIG_FONT_SPACE 19
+#define BIG_FONT_SIZE 22
+#define BIG_FONT_SPACE 30
 
 #define CLOCK_FONT FONT
-#define CLOCK_FONT_SIZE 32
+#define CLOCK_FONT_SIZE 52
 
 #define DECI_FONT FONT
-#define DECI_FONT_SIZE 20
+#define DECI_FONT_SIZE 32
 
 #define DETAIL_FONT "DejaVuSansMono-Bold.ttf"
-#define DETAIL_FONT_SIZE 9
-#define DETAIL_FONT_SPACE 12
+#define DETAIL_FONT_SIZE 15
+#define DETAIL_FONT_SPACE 19
 
 /* Screen size (pixels) */
 
-#define DEFAULT_WIDTH 960
-#define DEFAULT_HEIGHT 720
+#define DEFAULT_WIDTH 1280
+#define DEFAULT_HEIGHT 960
 
 /* Relationship between pixels and screen units */
 
@@ -81,17 +81,17 @@
 
 /* Dimensions in our own screen units */
 
-#define BORDER 12
-#define SPACER 8
-#define HALF_SPACER 4
+#define BORDER 18
+#define SPACER 14
+#define HALF_SPACER 7
 
-#define CURSOR_WIDTH 4
+#define CURSOR_WIDTH 6
 
-#define PLAYER_HEIGHT 213
-#define OVERVIEW_HEIGHT 16
+#define PLAYER_HEIGHT 340
+#define OVERVIEW_HEIGHT 26
 
-#define LIBRARY_MIN_WIDTH 64
-#define LIBRARY_MIN_HEIGHT 64
+#define LIBRARY_MIN_WIDTH 102
+#define LIBRARY_MIN_HEIGHT 102
 
 #define DEFAULT_METER_SCALE 8
 
@@ -100,18 +100,18 @@
 #define SEARCH_HEIGHT (FONT_SPACE)
 #define STATUS_HEIGHT (DETAIL_FONT_SPACE)
 
-#define BPM_WIDTH 32
-#define SORT_WIDTH 21
-#define RESULTS_ARTIST_WIDTH 200
+#define BPM_WIDTH 52
+#define SORT_WIDTH 33
+#define RESULTS_ARTIST_WIDTH 320
 
-#define TOKEN_SPACE 2
+#define TOKEN_SPACE 3
 
-#define CLOCKS_WIDTH 160
+#define CLOCKS_WIDTH 256
 
 #define SPINNER_SIZE (CLOCK_FONT_SIZE * 2 - 6)
 #define SCOPE_SIZE (CLOCK_FONT_SIZE * 2 - 6)
 
-#define SCROLLBAR_SIZE 10
+#define SCROLLBAR_SIZE 16
 
 #define METER_WARNING_TIME 20 /* time in seconds for "red waveform" warning */
 
@@ -315,6 +315,9 @@ static TTF_Font* open_font(const char *name, int size) {
             font = TTF_OpenFont(buf, pt);
             if (!font)
                 fprintf(stderr, "Font error: %s\n", TTF_GetError());
+
+            TTF_SetFontHinting(font, TTF_HINTING_NONE);
+
             return font; /* or NULL */
         }
 
@@ -632,7 +635,7 @@ static void draw_bpm(SDL_Surface *surface, const struct rect *rect, double bpm,
     f -= floor(f);
     h = f * 360.0; /* degrees */
 
-    draw_token(surface, rect, buf, text_col, hsv(h, 1.0, 0.3), bg_col);
+    draw_token(surface, rect, buf, text_col, hsv(h, 1.0, 0.5), bg_col);
 }
 
 /*
@@ -703,18 +706,23 @@ static void draw_clock(SDL_Surface *surface, const struct rect *rect, int t,
 static void draw_scope(SDL_Surface *surface, const struct rect *rect,
                        struct timecoder *tc)
 {
-    int r, c, v, mid;
+    int r, c, v;
+    unsigned short size, mid;
     Uint8 *p;
 
-    mid = tc->mon_size / 2;
+    assert(rect->w == tc->scope_size);
+    assert(rect->h == tc->scope_size);
+    size = rect->w;
 
-    for (r = 0; r < tc->mon_size; r++) {
-        for (c = 0; c < tc->mon_size; c++) {
+    mid = size / 2;
+
+    for (r = 0; r < size; r++) {
+        for (c = 0; c < size; c++) {
             p = surface->pixels
                 + (rect->y + r) * surface->pitch
                 + (rect->x + c) * surface->format->BytesPerPixel;
 
-            v = tc->mon[r * tc->mon_size + c];
+            v = tc->scope[r * size + c];
 
             if ((r == mid || c == mid) && v < 64)
                 v = 64;
@@ -1570,7 +1578,7 @@ static bool handle_key(SDL_Keycode key, Uint16 mod)
         size_t d;
 
         /* Handle the function key press in groups of four --
-	 * F1-F4 (deck 0), F5-F8 (deck 1) etc. */
+         * F1-F4 (deck 0), F5-F8 (deck 1) etc. */
 
         d = (key - SDLK_F1) / 4;
 
@@ -1813,7 +1821,7 @@ static void* launch(void *p)
  *   +10+10
  *   960x720+10+10
  *   /1.6
- *   1920x1200@1.6
+ *   1920x1200/1.6
  *
  * Return: -1 if string could not be actioned, otherwise 0
  */
@@ -1883,11 +1891,6 @@ static int parse_geometry(const char *s,
 
 static void cleanup()
 {
-    size_t n;
-
-    for (n = 0; n < ndeck; n++)
-        timecoder_monitor_clear(&deck[n].timecoder);
-
     clear_spinner();
     ignore(&on_status);
     ignore(&on_selector);
@@ -1972,14 +1975,14 @@ int interface_start(struct library *lib, const char *geo, bool decor)
     }
 
     /*
-     * Timecode monitors
+     * Visual display of timecode input audio
      */
 
     if (init_spinner(zoom(SPINNER_SIZE)) == -1)
         goto fail_sdl;
 
     for (n = 0; n < ndeck; n++) {
-        if (timecoder_monitor_init(&deck[n].timecoder, zoom(SCOPE_SIZE)) == -1)
+        if (timecoder_scope(&deck[n].timecoder, zoom(SCOPE_SIZE)) == -1)
             not_implemented();
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Mark Hills <mark@xwax.org>
+ * Copyright (C) 2026 Mark Hills <mark@xwax.org>
  *
  * This file is part of "xwax".
  *
@@ -17,6 +17,7 @@
  *
  */
 
+#include <limits.h>
 #include <poll.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -25,73 +26,73 @@
 
 #include "alsa.h"
 
-
-/* This structure doesn't have corresponding functions to be an
- * abstraction of the ALSA calls; it is merely a container for these
- * variables. */
-
-struct alsa_pcm {
+struct flow {
     snd_pcm_t *pcm;
 
     struct pollfd *pe;
     size_t pe_count; /* number of pollfd entries */
 
-    int rate;
+    unsigned int rate;
 };
-
 
 struct alsa {
-    struct alsa_pcm capture, playback;
-    bool playing;
+    struct flow capture, playback;
+    snd_pcm_uframes_t buffer, written;
 };
-
 
 static void alsa_error(const char *msg, int r)
 {
     fprintf(stderr, "ALSA %s: %s\n", msg, snd_strerror(r));
 }
 
-
-static bool chk(const char *s, int r)
+static bool _check(const char *s, int r)
 {
-    if (r < 0) {
-        alsa_error(s, r);
-        return false;
-    } else {
-        return true;
-    }
+    alsa_error(s, r);
+    return true;
 }
 
+/*
+ * Pass back errors from ALSA functions
+ *
+ * Macro complexity is undesirable, but paying the price here makes
+ * repeated handling of these clear and concise.
+ */
 
-/* "rate" of zero means automatically select an appropriate rate */
+#define CHECK(name, r) \
+    for (bool _x = false; r < 0 && (_x || _check(name, r)); _x = true)  \
+        if (_x) \
+            return false; \
+        else /* custom failure code run before return */
 
-static int pcm_open(struct alsa_pcm *alsa, const char *device_name,
-                    snd_pcm_stream_t stream, unsigned int rate, int buffer)
+/*
+ * Set ALSA "hardware" parameters
+ *
+ * These control buffer sizes and other things in the chain
+ * beyond this application.
+ *
+ * A "buffer" of 0 uses the device's maximum.
+ */
+
+static bool set_hw(snd_pcm_t *pcm, snd_pcm_stream_t stream,
+                   unsigned int *rate,
+                   snd_pcm_uframes_t buffer)
 {
     int r, dir;
-    snd_pcm_hw_params_t *hw_params;
+    snd_pcm_hw_params_t *hw;
     snd_pcm_uframes_t frames;
 
-    r = snd_pcm_open(&alsa->pcm, device_name, stream, SND_PCM_NONBLOCK);
-    if (!chk("open", r))
-        return -1;
+    snd_pcm_hw_params_alloca(&hw);
 
-    snd_pcm_hw_params_alloca(&hw_params);
+    r = snd_pcm_hw_params_any(pcm, hw);
+    CHECK("hw_params_any", r);
 
-    r = snd_pcm_hw_params_any(alsa->pcm, hw_params);
-    if (!chk("hw_params_any", r))
-        return -1;
+    r = snd_pcm_hw_params_set_access(pcm, hw, SND_PCM_ACCESS_MMAP_INTERLEAVED);
+    CHECK("hw_params_set_access", r);
 
-    r = snd_pcm_hw_params_set_access(alsa->pcm, hw_params,
-                                     SND_PCM_ACCESS_MMAP_INTERLEAVED);
-    if (!chk("hw_params_set_access", r))
-        return -1;
-
-    r = snd_pcm_hw_params_set_format(alsa->pcm, hw_params, SND_PCM_FORMAT_S16);
-    if (!chk("hw_params_set_format", r)) {
+    r = snd_pcm_hw_params_set_format(pcm, hw, SND_PCM_FORMAT_S16);
+    CHECK("hw_params_set_format", r) {
         fprintf(stderr, "16-bit signed format is not available. "
                 "You may need to use a 'plughw' device.\n");
-        return -1;
     }
 
     /* Prevent accidentally introducing excess resamplers. There is
@@ -99,16 +100,14 @@ static int pcm_open(struct alsa_pcm *alsa, const char *device_name,
      * This is even if a 'plug' device is used, which effectively lets
      * the user unknowingly select any sample rate. */
 
-    r = snd_pcm_hw_params_set_rate_resample(alsa->pcm, hw_params, 0);
-    if (!chk("hw_params_set_rate_resample", r))
-        return -1;
+    r = snd_pcm_hw_params_set_rate_resample(pcm, hw, 0);
+    CHECK("hw_params_set_rate_resample", r);
 
-    if (rate) {
-        r = snd_pcm_hw_params_set_rate(alsa->pcm, hw_params, rate, 0);
-        if (!chk("hw_params_set_rate", r)) {
+    if (*rate) {
+        r = snd_pcm_hw_params_set_rate(pcm, hw, *rate, 0);
+        CHECK("hw_params_set_rate", r) {
             fprintf(stderr, "Sample rate of %dHz is not implemented by the hardware.\n",
-                    rate);
-            return -1;
+                    *rate);
         }
 
     } else {
@@ -118,98 +117,144 @@ static int pcm_open(struct alsa_pcm *alsa, const char *device_name,
          * a fixed sample rate anyway. */
 
         dir = -1;
-        rate = 48000;
+        *rate = 48000;
 
-        r = snd_pcm_hw_params_set_rate_near(alsa->pcm, hw_params, &rate, &dir);
-        if (!chk("hw_params_set_rate_near", r))
-            return -1;
+        r = snd_pcm_hw_params_set_rate_near(pcm, hw, rate, &dir);
+        CHECK("hw_params_set_rate_near", r);
 
         /* "rate" is set on return */
     }
 
-    alsa->rate = rate;
-
-    r = snd_pcm_hw_params_set_channels(alsa->pcm, hw_params, DEVICE_CHANNELS);
-    if (!chk("hw_params_set_channels", r)) {
+    r = snd_pcm_hw_params_set_channels(pcm, hw, DEVICE_CHANNELS);
+    CHECK("hw_params_set_channels", r) {
         fprintf(stderr, "%d channel audio not available on this device.\n",
                 DEVICE_CHANNELS);
-        return -1;
     }
 
-    /* This is fundamentally a latency-sensitive application that is
-     * likely to be the primary application running, so assume we want
-     * the hardware to be giving us immediate wakeups */
+    /* Declare buffer size first, attempting to ensure it is not
+     * constrained by the period size */
 
-    r = snd_pcm_hw_params_set_period_size_first(alsa->pcm, hw_params, &frames, &dir);
-    if (!chk("hw_params_set_buffer_time_near", r))
-        return -1;
-
-    switch (stream) {
-    case SND_PCM_STREAM_CAPTURE:
-        /* Maximum buffer to minimise drops */
-        r = snd_pcm_hw_params_set_buffer_size_last(alsa->pcm, hw_params, &frames);
-        if (!chk("hw_params_set_buffer_size_last", r))
-            return -1;
-        break;
-
-    case SND_PCM_STREAM_PLAYBACK:
-        /* Smallest possible buffer to keep latencies low */
-        r = snd_pcm_hw_params_set_buffer_size(alsa->pcm, hw_params, buffer);
-        if (!chk("hw_params_set_buffer_size", r)) {
-            fprintf(stderr, "Buffer of %u samples is probably too small; try increasing it with --buffer\n",
+    if (!buffer) {
+        r = snd_pcm_hw_params_set_buffer_size_last(pcm, hw, &frames);
+        CHECK("hw_params_set_buffer_size_last", r);
+    } else {
+        r = snd_pcm_hw_params_set_buffer_size(pcm, hw, buffer);
+        CHECK("hw_params_set_buffer_size", r) {
+            fprintf(stderr, "Buffer of %lu samples is probably too small; try increasing it with --buffer\n",
                     buffer);
-            return -1;
         }
-        break;
-
-    default:
-        abort();
     }
 
-    r = snd_pcm_hw_params(alsa->pcm, hw_params);
-    if (!chk("hw_params", r))
+    /* Use the smallest period size for a latency-sensitive
+     * application that is the primary one on the system */
+
+    r = snd_pcm_hw_params_set_period_size_first(pcm, hw, &frames, &dir);
+    CHECK("hw_params_set_buffer_time_near", r);
+
+    r = snd_pcm_hw_params(pcm, hw);
+    CHECK("hw_params", r);
+
+    return true;
+}
+
+/*
+ * Set ALSA's "software" parameters
+ *
+ * These control when ALSA invokes certain actions, and there are no
+ * reasonable defaults documented.
+ */
+
+static bool set_sw(snd_pcm_t *pcm)
+{
+    int r;
+    snd_pcm_sw_params_t *sw;
+
+    snd_pcm_sw_params_alloca(&sw);
+
+    r = snd_pcm_sw_params_current(pcm, sw);
+    CHECK("sw_params_current", r);
+
+    /*
+     * Using the start threshold would be preferred but appears to be
+     * ignored when mmap is used.
+     *
+     * Since the behaviour is not documented, be explicit and make
+     * later calls to snd_pcm_start()
+     *
+     * https://lore.kernel.org/alsa-devel/dbcc61b6-a5be-b2c3-381c-63d5a8a9a843@xwax.org/T/#u
+     */
+
+    r = snd_pcm_sw_params_set_start_threshold(pcm, sw, LONG_MAX);
+    CHECK("sw_params_set_start_threshold", r);
+
+    r = snd_pcm_sw_params_set_avail_min(pcm, sw, 1);
+    CHECK("sw_params_set_avail_min", r);
+
+    r = snd_pcm_sw_params(pcm, sw);
+    CHECK("sw_params", r);
+
+    return true;
+}
+
+/*
+ * Open capture or playback
+ *
+ * "rate" of zero means automatically select an appropriate rate.
+ * "buffer" size in frames
+ */
+
+static int flow_open(struct flow *flow, const char *name,
+                     snd_pcm_stream_t stream,
+                     unsigned int rate,
+                     int buffer)
+{
+    int r;
+
+    r = snd_pcm_open(&flow->pcm, name, stream, SND_PCM_NONBLOCK);
+    if (r < 0) {
+        alsa_error("open", r);
+        return -1;
+    }
+
+    flow->rate = rate;
+
+    if (!set_hw(flow->pcm, stream, &flow->rate, buffer))
+        return -1;
+
+    if (!set_sw(flow->pcm))
         return -1;
 
     return 0;
 }
 
-
-static void pcm_close(struct alsa_pcm *alsa)
-{
-    if (snd_pcm_close(alsa->pcm) < 0)
-        abort();
-}
-
-
-static ssize_t pcm_pollfds(struct alsa_pcm *alsa, struct pollfd *pe,
-			   size_t z)
+static ssize_t flow_pollfds(struct flow *flow, struct pollfd *pe,
+                           size_t z)
 {
     int r, count;
 
-    count = snd_pcm_poll_descriptors_count(alsa->pcm);
+    count = snd_pcm_poll_descriptors_count(flow->pcm);
     if (count > z)
         return -1;
 
     if (count == 0)
-        alsa->pe = NULL;
+        flow->pe = NULL;
     else {
-        r = snd_pcm_poll_descriptors(alsa->pcm, pe, count);
+        r = snd_pcm_poll_descriptors(flow->pcm, pe, count);
         if (r < 0) {
             alsa_error("poll_descriptors", r);
             return -1;
         }
-        alsa->pe = pe;
+        flow->pe = pe;
     }
 
-    alsa->pe_count = count;
+    flow->pe_count = count;
     return count;
 }
 
-
-static int pcm_revents(struct alsa_pcm *alsa, unsigned short *revents) {
+static int flow_revents(struct flow *flow, unsigned short *revents) {
     int r;
 
-    r = snd_pcm_poll_descriptors_revents(alsa->pcm, alsa->pe, alsa->pe_count,
+    r = snd_pcm_poll_descriptors_revents(flow->pcm, flow->pe, flow->pe_count,
                                          revents);
     if (r < 0) {
         alsa_error("poll_descriptors_revents", r);
@@ -219,9 +264,9 @@ static int pcm_revents(struct alsa_pcm *alsa, unsigned short *revents) {
     return 0;
 }
 
-
-
-/* Start the audio device capture and playback */
+/*
+ * When the realtime thread should begin processing
+ */
 
 static void start(struct device *dv)
 {
@@ -231,9 +276,9 @@ static void start(struct device *dv)
         abort();
 }
 
-
-/* Register this device's interest in a set of pollfd file
- * descriptors */
+/*
+ * Populate the file descriptors to monitor
+ */
 
 static ssize_t pollfds(struct device *dv, struct pollfd *pe, size_t z)
 {
@@ -242,7 +287,7 @@ static ssize_t pollfds(struct device *dv, struct pollfd *pe, size_t z)
 
     total = 0;
 
-    r = pcm_pollfds(&alsa->capture, pe, z);
+    r = flow_pollfds(&alsa->capture, pe, z);
     if (r < 0)
         return -1;
 
@@ -250,7 +295,7 @@ static ssize_t pollfds(struct device *dv, struct pollfd *pe, size_t z)
     z -= r;
     total += r;
 
-    r = pcm_pollfds(&alsa->playback, pe, z);
+    r = flow_pollfds(&alsa->playback, pe, z);
     if (r < 0)
         return -1;
 
@@ -259,13 +304,15 @@ static ssize_t pollfds(struct device *dv, struct pollfd *pe, size_t z)
     return total;
 }
 
-
-/* Access the interleaved area presented by the ALSA library.  The
- * device is opened SND_PCM_FORMAT_S16 which is in the local endianess
- * and therefore is "signed short" */
+/*
+ * Access the interleaved area presented by the ALSA library
+ *
+ * The device is opened SND_PCM_FORMAT_S16 which is in the local
+ * endianess and therefore is "signed short"
+ */
 
 static signed short *buffer(const snd_pcm_channel_area_t *area,
-                          snd_pcm_uframes_t offset)
+                            snd_pcm_uframes_t offset)
 {
     assert(area->first % 8 == 0);
     assert(area->step == 32);  /* 2 channel 16-bit interleaved */
@@ -273,21 +320,16 @@ static signed short *buffer(const snd_pcm_channel_area_t *area,
     return area->addr + area->first / 8 + offset * area->step / 8;
 }
 
-
-/* Collect audio from the player and push it into the device's buffer,
- * for playback */
+/*
+ * Process audio for playback and post it to the hardware buffer
+ */
 
 static int playback(struct device *dv)
 {
     int r;
-    snd_pcm_state_t state;
     snd_pcm_uframes_t frames, offset;
     const snd_pcm_channel_area_t *area;
     struct alsa *alsa = (struct alsa*)dv->local;
-
-    state = snd_pcm_state(alsa->capture.pcm);
-    if (state == SND_PCM_STATE_XRUN)
-        return -EPIPE;
 
     frames = snd_pcm_avail_update(alsa->playback.pcm);
     if (frames < 0)
@@ -297,43 +339,39 @@ static int playback(struct device *dv)
     if (r < 0)
         return r;
 
-    assert(frames > 0);  /* otherwise we were woken unnecessarily */
-
-    device_collect(dv, buffer(&area[0], offset), frames);
+    if (frames > 0)
+        device_collect(dv, buffer(&area[0], offset), frames);
 
     r = snd_pcm_mmap_commit(alsa->playback.pcm, offset, frames);
     if (r < 0)
         return r;
 
-    /* If this is the initial write, assume the buffer gets filled to
-     * the maximum and it's time to consume the buffer */
+    /* The start threshold is switched off; maintain our
+     * own count of when to tell the hardware to start */
 
-    if (!alsa->playing) {
-        r = snd_pcm_start(alsa->playback.pcm);
-        if (r < 0)
-            return r;
+    if (alsa->written < alsa->buffer) {
+        alsa->written += frames;
 
-        alsa->playing = true;
+        if (alsa->written >= alsa->buffer) {
+            r = snd_pcm_start(alsa->playback.pcm);
+            if (r < 0)
+                return r;
+        }
     }
 
     return 0;
 }
 
-
-/* Pull audio from the device's buffer for capture, and pass it
- * through to the timecoder */
+/*
+ * Read frames of audio from the hardware and pass to the timecoder
+ */
 
 static int capture(struct device *dv)
 {
     int r;
-    snd_pcm_state_t state;
     snd_pcm_uframes_t frames, offset;
     const snd_pcm_channel_area_t *area;
     struct alsa *alsa = (struct alsa*)dv->local;
-
-    state = snd_pcm_state(alsa->capture.pcm);
-    if (state == SND_PCM_STATE_XRUN)
-        return -EPIPE;
 
     frames = snd_pcm_avail(alsa->capture.pcm);
     if (frames < 0)
@@ -343,9 +381,8 @@ static int capture(struct device *dv)
     if (r < 0)
         return r;
 
-    assert(frames > 0);  /* otherwise we were woken unnecessarily */
-
-    device_submit(dv, buffer(&area[0], offset), frames);
+    if (frames > 0)
+        device_submit(dv, buffer(&area[0], offset), frames);
 
     r = snd_pcm_mmap_commit(alsa->capture.pcm, offset, frames);
     if (r < 0)
@@ -354,9 +391,9 @@ static int capture(struct device *dv)
     return 0;
 }
 
-
-/* After poll() has returned, instruct a device to do all it can at
- * the present time. Return zero if success, otherwise -1 */
+/*
+ * After poll(), do everything which can be done at the present time
+ */
 
 static int handle(struct device *dv)
 {
@@ -366,7 +403,7 @@ static int handle(struct device *dv)
 
     /* Check input buffer for timecode capture */
 
-    r = pcm_revents(&alsa->capture, &revents);
+    r = flow_revents(&alsa->capture, &revents);
     if (r < 0)
         return -1;
 
@@ -398,7 +435,7 @@ static int handle(struct device *dv)
 
     /* Check the output buffer for playback */
 
-    r = pcm_revents(&alsa->playback, &revents);
+    r = flow_revents(&alsa->playback, &revents);
     if (r < 0)
         return -1;
 
@@ -415,7 +452,7 @@ static int handle(struct device *dv)
                     return -1;
                 }
 
-                alsa->playing = false;
+                alsa->written = 0;
 
                 /* POLLOUT events will be generated now, and we
                  * explicitly start the device when writing */
@@ -430,7 +467,6 @@ static int handle(struct device *dv)
     return 0;
 }
 
-
 static unsigned int sample_rate(struct device *dv)
 {
     struct alsa *alsa = (struct alsa*)dv->local;
@@ -438,18 +474,18 @@ static unsigned int sample_rate(struct device *dv)
     return alsa->capture.rate;
 }
 
-
-/* Close ALSA device and clear any allocations */
-
 static void clear(struct device *dv)
 {
     struct alsa *alsa = (struct alsa*)dv->local;
 
-    pcm_close(&alsa->capture);
-    pcm_close(&alsa->playback);
+    if (snd_pcm_close(alsa->capture.pcm) < 0)
+        abort();
+
+    if (snd_pcm_close(alsa->playback.pcm) < 0)
+        abort();
+
     free(dv->local);
 }
-
 
 static struct device_ops alsa_ops = {
     .pollfds = pollfds,
@@ -459,10 +495,16 @@ static struct device_ops alsa_ops = {
     .clear = clear
 };
 
+/*
+ * Open an ALSA device
+ *
+ * ALSA distinguishes separate devices for capture and playback
+ * but this code assumes they are the same.
+ *
+ * No audio flows until the start() is called.
+ */
 
-/* Open ALSA device. Do not operate on audio until device_start() */
-
-int alsa_init(struct device *dv, const char *device_name,
+int alsa_init(struct device *dv, const char *name,
               unsigned int rate, unsigned int buffer)
 {
     struct alsa *alsa;
@@ -473,16 +515,17 @@ int alsa_init(struct device *dv, const char *device_name,
         return -1;
     }
 
-    alsa->playing = false;
+    alsa->buffer = buffer;
+    alsa->written = 0;
 
-    if (pcm_open(&alsa->capture, device_name, SND_PCM_STREAM_CAPTURE,
-                rate, buffer) < 0)
+    if (flow_open(&alsa->capture, name, SND_PCM_STREAM_CAPTURE,
+                 rate, 0) < 0)
     {
         fputs("Failed to open device for capture.\n", stderr);
         goto fail;
     }
 
-    if (pcm_open(&alsa->playback, device_name, SND_PCM_STREAM_PLAYBACK,
+    if (flow_open(&alsa->playback, name, SND_PCM_STREAM_PLAYBACK,
                 rate, buffer) < 0)
     {
         fputs("Failed to open device for playback.\n", stderr);
@@ -495,15 +538,17 @@ int alsa_init(struct device *dv, const char *device_name,
     return 0;
 
  fail_capture:
-    pcm_close(&alsa->capture);
+    if (snd_pcm_close(alsa->capture.pcm) < 0)
+        abort();
  fail:
     free(alsa);
     return -1;
 }
 
-
-/* ALSA caches information when devices are open. Provide a call
- * to clear these caches so that valgrind output is clean. */
+/*
+ * ALSA caches information when devices are open. Provide a call
+ * to clear these caches so that valgrind output is clean.
+ */
 
 void alsa_clear_config_cache(void)
 {

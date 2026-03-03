@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Mark Hills <mark@xwax.org>
+ * Copyright (C) 2026 Mark Hills <mark@xwax.org>
  *
  * This file is part of "xwax".
  *
@@ -44,7 +44,7 @@ struct timecode_def {
 
 struct timecoder_channel {
     bool positive, /* wave is in positive part of cycle */
-	swapped; /* wave recently swapped polarity */
+        swapped; /* wave recently swapped polarity */
     signed int zero;
     unsigned int crossing_ticker; /* samples since we last crossed zero */
 };
@@ -72,10 +72,11 @@ struct timecoder {
     unsigned int valid_counter, /* number of successful error checks */
         timecode_ticker; /* samples since valid timecode was read */
 
-    /* Feedback */
+    /* Scope display */
 
-    unsigned char *mon; /* x-y array */
-    int mon_size, mon_counter;
+    unsigned char *scope; /* x-y array */
+    size_t scope_len; /* in bytes */
+    unsigned short scope_size, scope_counter;
 };
 
 struct timecode_def* timecoder_find_definition(const char *name);
@@ -85,8 +86,7 @@ void timecoder_init(struct timecoder *tc, struct timecode_def *def,
                     double speed, unsigned int sample_rate, bool phono);
 void timecoder_clear(struct timecoder *tc);
 
-int timecoder_monitor_init(struct timecoder *tc, int size);
-void timecoder_monitor_clear(struct timecoder *tc);
+int timecoder_scope(struct timecoder *tc, unsigned short size);
 
 void timecoder_cycle_definition(struct timecoder *tc);
 void timecoder_submit(struct timecoder *tc, signed short *pcm, size_t npcm);

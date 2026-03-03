@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Mark Hills <mark@xwax.org>
+ * Copyright (C) 2026 Mark Hills <mark@xwax.org>
  *
  * This file is part of "xwax".
  *
@@ -52,7 +52,7 @@
 
 #define VALID_BITS 24
 
-#define MONITOR_DECAY_EVERY 512 /* in samples */
+#define SCOPE_DECAY_EVERY 512 /* in samples */
 
 #define SQ(x) ((x)*(x))
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
@@ -229,7 +229,7 @@ static int build_lookup(struct timecode_def *def)
             def->bits, def->resolution, def->desc);
 
     if (lut_init(&def->lut, def->length) == -1)
-	return -1;
+        return -1;
 
     current = def->seed;
 
@@ -337,7 +337,7 @@ void timecoder_init(struct timecoder *tc, struct timecode_def *def,
     tc->valid_counter = 0;
     tc->timecode_ticker = 0;
 
-    tc->mon = NULL;
+    tc->scope = NULL;
 }
 
 /*
@@ -346,41 +346,41 @@ void timecoder_init(struct timecoder *tc, struct timecode_def *def,
 
 void timecoder_clear(struct timecoder *tc)
 {
-    assert(tc->mon == NULL);
+    if (tc->scope)
+        free(tc->scope);
 }
 
 /*
- * Initialise a raster display of the incoming audio
+ * Request a raster display of the incoming audio
  *
- * The monitor (otherwise known as 'scope' in the interface) is an x-y
- * display of the post-calibrated incoming audio.
+ * The 'scope' (like an oscilloscope) is an x-y display of the
+ * post-calibrated incoming audio. It requires additional memory.
  *
  * Return: -1 if not enough memory could be allocated, otherwise 0
  */
 
-int timecoder_monitor_init(struct timecoder *tc, int size)
+int timecoder_scope(struct timecoder *tc, unsigned short size)
 {
-    assert(tc->mon == NULL);
-    tc->mon_size = size;
-    tc->mon = malloc(SQ(tc->mon_size));
-    if (tc->mon == NULL) {
+    size_t len;
+    void *x;
+
+    len = SQ(size) * sizeof(*tc->scope);
+
+    x = malloc(len);
+    if (!x) {
         perror("malloc");
         return -1;
     }
-    memset(tc->mon, 0, SQ(tc->mon_size));
-    tc->mon_counter = 0;
+
+    memset(x, 0, len);
+
+    tc->scope_len = len;
+    tc->scope_size = size;
+    tc->scope_counter = 0;
+    assert(!tc->scope);
+    tc->scope = x;  /* beware calling this from another thread */
+
     return 0;
-}
-
-/*
- * Clear the monitor on the given timecoder
- */
-
-void timecoder_monitor_clear(struct timecoder *tc)
-{
-    assert(tc->mon != NULL);
-    free(tc->mon);
-    tc->mon = NULL;
 }
 
 /*
@@ -408,27 +408,27 @@ static void detect_zero_crossing(struct timecoder_channel *ch,
 }
 
 /*
- * Plot the given sample value in the x-y monitor
+ * Visualise the given sample value in the x-y scope
  */
 
-static void update_monitor(struct timecoder *tc, signed int x, signed int y)
+static void update_scope(struct timecoder *tc, signed int x, signed int y)
 {
     int px, py, size, ref;
 
-    if (!tc->mon)
+    if (!tc->scope)
         return;
 
-    size = tc->mon_size;
+    size = tc->scope_size;
     ref = tc->ref_level;
 
     /* Decay the pixels already in the montior */
 
-    if (++tc->mon_counter % MONITOR_DECAY_EVERY == 0) {
+    if (++tc->scope_counter % SCOPE_DECAY_EVERY == 0) {
         int p;
 
         for (p = 0; p < SQ(size); p++) {
-            if (tc->mon[p])
-                tc->mon[p] = tc->mon[p] * 7 / 8;
+            if (tc->scope[p])
+                tc->scope[p] = tc->scope[p] * 7 / 8;
         }
     }
 
@@ -441,7 +441,7 @@ static void update_monitor(struct timecoder *tc, signed int x, signed int y)
     if (px < 0 || px >= size || py < 0 || py >= size)
         return;
 
-    tc->mon[py * size + px] = 0xff; /* white */
+    tc->scope[py * size + px] = 0xff; /* white */
 }
 
 /*
@@ -461,23 +461,23 @@ static void process_bitstream(struct timecoder *tc, signed int m)
      * the vinyl, regardless of the direction. */
 
     if (tc->forwards) {
-	tc->timecode = fwd(tc->timecode, tc->def);
-	tc->bitstream = (tc->bitstream >> 1)
-	    + (b << (tc->def->bits - 1));
+        tc->timecode = fwd(tc->timecode, tc->def);
+        tc->bitstream = (tc->bitstream >> 1)
+            + (b << (tc->def->bits - 1));
 
     } else {
-	bits_t mask;
+        bits_t mask;
 
-	mask = ((1 << tc->def->bits) - 1);
-	tc->timecode = rev(tc->timecode, tc->def);
-	tc->bitstream = ((tc->bitstream << 1) & mask) + b;
+        mask = ((1 << tc->def->bits) - 1);
+        tc->timecode = rev(tc->timecode, tc->def);
+        tc->bitstream = ((tc->bitstream << 1) & mask) + b;
     }
 
     if (tc->timecode == tc->bitstream)
-	tc->valid_counter++;
+        tc->valid_counter++;
     else {
-	tc->timecode = tc->bitstream;
-	tc->valid_counter = 0;
+        tc->timecode = tc->bitstream;
+        tc->valid_counter = 0;
     }
 
     /* Take note of the last time we read a valid timecode */
@@ -492,8 +492,8 @@ static void process_bitstream(struct timecoder *tc, signed int m)
     debug("%+6d zero, %+6d (ref %+6d)\t= %d%c (%5d)",
           tc->primary.zero,
           m, tc->ref_level,
-	  b, tc->valid_counter == 0 ? 'x' : ' ',
-	  tc->valid_counter);
+          b, tc->valid_counter == 0 ? 'x' : ' ',
+          tc->valid_counter);
 }
 
 /*
@@ -504,7 +504,7 @@ static void process_bitstream(struct timecoder *tc, signed int m)
  */
 
 static void process_sample(struct timecoder *tc,
-			   signed int primary, signed int secondary)
+                           signed int primary, signed int secondary)
 {
     detect_zero_crossing(&tc->primary, primary, tc->zero_alpha, tc->threshold);
     detect_zero_crossing(&tc->secondary, secondary, tc->zero_alpha, tc->threshold);
@@ -522,7 +522,7 @@ static void process_sample(struct timecoder *tc,
         }
 
         if (tc->def->flags & SWITCH_PHASE)
-	    forwards = !forwards;
+            forwards = !forwards;
 
         if (forwards != tc->forwards) { /* direction has changed */
             tc->forwards = forwards;
@@ -534,14 +534,14 @@ static void process_sample(struct timecoder *tc,
      * counters */
 
     if (!tc->primary.swapped && !tc->secondary.swapped)
-	pitch_dt_observation(&tc->pitch, 0.0);
+        pitch_dt_observation(&tc->pitch, 0.0);
     else {
-	double dx;
+        double dx;
 
-	dx = 1.0 / tc->def->resolution / 4;
-	if (!tc->forwards)
-	    dx = -dx;
-	pitch_dt_observation(&tc->pitch, dx);
+        dx = 1.0 / tc->def->resolution / 4;
+        if (!tc->forwards)
+            dx = -dx;
+        pitch_dt_observation(&tc->pitch, dx);
     }
 
     /* If we have crossed the primary channel in the right polarity,
@@ -554,7 +554,7 @@ static void process_sample(struct timecoder *tc,
 
         /* scale to avoid clipping */
         m = abs(primary / 2 - tc->primary.zero / 2);
-	process_bitstream(tc, m);
+        process_bitstream(tc, m);
     }
 
     tc->timecode_ticker++;
@@ -601,7 +601,7 @@ void timecoder_cycle_definition(struct timecoder *tc)
 void timecoder_submit(struct timecoder *tc, signed short *pcm, size_t npcm)
 {
     while (npcm--) {
-	signed int left, right, primary, secondary;
+        signed int left, right, primary, secondary;
 
         left = pcm[0] << 16;
         right = pcm[1] << 16;
@@ -614,8 +614,8 @@ void timecoder_submit(struct timecoder *tc, signed short *pcm, size_t npcm)
             secondary = left;
         }
 
-	process_sample(tc, primary, secondary);
-        update_monitor(tc, left, right);
+        process_sample(tc, primary, secondary);
+        update_scope(tc, left, right);
 
         pcm += TIMECODER_CHANNELS;
     }

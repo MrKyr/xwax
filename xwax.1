@@ -1,9 +1,10 @@
+'\" t
 .TH XWAX "1"
 .SH NAME
 xwax \- Digital vinyl on Linux
 .SH SYNOPSIS
 .B xwax
-[\fIoptions\fR]
+[\fIoptions\fR] [-- \fIpath\fR ...]
 .SH DESCRIPTION
 .P
 xwax is vinyl emulation software for Linux. It allows DJs and
@@ -20,10 +21,15 @@ below.
 .TP
 .B \-l, \-\-crate \fIpath\fR
 Scan for tracks or playlist at the given path. Tracks are grouped into
-a crate in the music library.
+a crate in the music library. Paths can also be given at the end of the
+command, after a
+.B \-\-
+argument.
 .TP
 .B \-\-timecode \fIname\fR
-Use the named timecode for subsequent decks. See \-\-help for a list of
+Use the named timecode for subsequent decks. See
+.B \-\-help
+for a list of
 valid timecodes. You will need the corresponding timecode signal on
 vinyl to control playback.
 .TP
@@ -60,7 +66,9 @@ standard output.
 .TP
 .B \-\-scan \fIpath\fR
 Execute the given program to scan music libraries. Applies to
-subsequent use of the \-\-crate flag.
+subsequent use of the
+.B \-\-crate
+flag.
 .TP
 .B \-\-dummy
 Create a deck which is not connected to any audio device, used
@@ -90,7 +98,7 @@ Request to the window manager to create a 'frameless' window which
 does not have the regular controls such as title bars and buttons.
 This can be useful in conjunction with the
 .B \-\-geometry
-flag for dedicated xwax installations.
+flag for dedicated xwax appliances.
 .TP
 .B \-h, \-\-help
 Display the help message and default values.
@@ -250,7 +258,7 @@ xwax \-\-crate ~/music \-\-timecode serato_2a \-\-alsa hw:0 \-\-timecode mixvibe
 As above, but with the second deck at 45 RPM:
 .sp
 .RS
-xwax \-\-crate ~/music \-\-timecode serato_2a \-\-alsa hw:0 \-\-timecode mixvibes_v2 \-45 \-\-alsa hw:1
+xwax \-\-crate ~/music \-\-timecode serato_2a \-\-alsa hw:0 \-\-timecode mixvibes_v2 \-\-45 \-\-alsa hw:1
 .RE
 .P
 Default to the same timecode, but allow switching at runtime:
@@ -275,6 +283,19 @@ Scan multiple music libraries:
 .sp
 .RS
 xwax \-\-crate ~/music \-\-crate ~/sounds \-\-crate ~/mixes \-\-alsa hw:0
+.RE
+.P
+A shorter form of the above which can also be easier to script:
+.sp
+.RS
+xwax \-\-alsa hw:0 -- ~/music ~/sounds ~/mixes
+.RE
+.P
+Load all subdirectories and put each one in its own crate, with support
+from the shell wildcard operator:
+.sp
+.RS
+xwax \-\-alsa hw:0 -- ~/music/*
 .RE
 .P
 Scan a second music library using a custom script:

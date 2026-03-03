@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Mark Hills <mark@xwax.org>
+ * Copyright (C) 2026 Mark Hills <mark@xwax.org>
  *
  * This file is part of "xwax".
  *
@@ -85,7 +85,7 @@ static inline void list_del(struct list *entry)
 
 static inline bool list_empty(const struct list *head)
 {
-	return head->next == head;
+        return head->next == head;
 }
 
 #define list_entry(ptr, type, member) \

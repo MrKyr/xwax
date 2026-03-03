@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Mark Hills <mark@xwax.org>
+ * Copyright (C) 2026 Mark Hills <mark@xwax.org>
  *
  * This file is part of "xwax".
  *
@@ -157,7 +157,7 @@ static struct device_ops oss_ops = {
 
 
 int oss_init(struct device *dv, const char *filename, unsigned int rate,
-	     unsigned short buffers, unsigned short fragment)
+             unsigned short buffers, unsigned short fragment)
 {
     int p, fd;
     struct oss *oss;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Mark Hills <mark@xwax.org>
+ * Copyright (C) 2026 Mark Hills <mark@xwax.org>
  *
  * This file is part of "xwax".
  *
@@ -55,7 +55,7 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
 
 char *banner = "xwax " VERSION \
-    " (C) Copyright 2025 Mark Hills <mark@xwax.org>";
+    " (C) Copyright 2026 Mark Hills <mark@xwax.org>";
 
 size_t ndeck;
 struct deck deck[3];
@@ -72,7 +72,7 @@ static struct timecode_def *timecode;
 
 static void usage(FILE *fd)
 {
-    fprintf(fd, "Usage: xwax [<options>]\n\n");
+    fprintf(fd, "Usage: xwax [<options>] [-- <path> ...]\n\n");
 
     fprintf(fd, "Program-wide options:\n"
       "  --lock-ram          Lock real-time memory into RAM\n"
@@ -388,8 +388,8 @@ int main(int argc, const char *argv[])
 #endif
 
         } else if (!strcmp(argv[0], "--oss") || !strcmp(argv[0], "--alsa") ||
-		  !strcmp(argv[0], "--jack"))
-	{
+                  !strcmp(argv[0], "--jack"))
+        {
             int r;
             struct device *device;
 
@@ -634,10 +634,24 @@ int main(int argc, const char *argv[])
             argc -= 2;
 #endif
 
+        } else if (!strcmp(argv[0], "--")) {
+            argv++;
+            argc--;
+
+            break;
+
         } else {
             fprintf(stderr, "'%s' argument is unknown; try -h.\n", argv[0]);
             return -1;
         }
+    }
+
+    while (argc > 0) {
+        if (library_import(&library, scanner, argv[0]) == -1)
+            return -1;
+
+        argv++;
+        argc--;
     }
 
 #ifdef WITH_ALSA
@@ -665,6 +679,15 @@ int main(int argc, const char *argv[])
 
     if (interface_start(&library, geo, decor) == -1)
         goto out_rt;
+
+    for (n = 0; n < ndeck; n++) {
+        struct timecoder *tc = &deck[n].timecoder;
+
+        if (use_mlock && mlock(tc->scope, tc->scope_len) == -1) {
+            perror("mlock");
+            goto out_interface;
+        }
+    }
 
     if (rig_main() == -1)
         goto out_interface;
